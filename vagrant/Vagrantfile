@@ -1,0 +1,48 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+require 'etc'
+
+def form_ips(is_home = "false", num = 0)
+    @is_home = is_home.to_s.downcase == "true"
+    @header = "10.211."
+    if @is_home
+        return "%s100.%d" % [@header, 100 + num]
+    else
+        @suffix = Etc.getlogin[-3..-1].to_i * 3
+        return "%s%d.%d" % [@header, @suffix / 256, @suffix % 256 - num]
+    end
+end
+
+@ip = form_ips ENV['IS_HOME']
+puts "This script will start these VMs:"
+puts "%s-nginx-server with IP %s" % [Etc.getlogin, @ip]
+
+$update_ubuntu = <<SCRIPT
+apt install python-dev python3-dev -y
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  config.hostmanager.enabled = false
+  config.hostmanager.manage_guest = true
+  config.hostmanager.include_offline = true
+  config.hostmanager.ignore_private_ip = false
+  config.ssh.forward_agent = true
+  config.vm.synced_folder '.', '/vagrant', disabled: true
+  config.vm.define :main do |main|
+    main.vm.box = "ubuntu/bionic64"
+    main.vm.provider "virtualbox" do |vb|
+      vb.cpus = "1"
+      vb.memory = "1024"
+    end
+    main.vm.network :private_network, ip: @ip
+    main.vm.hostname = Etc.getlogin + "-nginx-server"
+    main.vm.provision :hostmanager
+    main.vm.provision :shell, :inline => $update_ubuntu
+    main.vm.provision :shell, inline: <<-SHELL
+      sed -i 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+      sudo service ssh restart
+    SHELL
+  end  
+end
+

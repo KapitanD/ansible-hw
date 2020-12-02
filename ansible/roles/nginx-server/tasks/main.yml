@@ -1,0 +1,51 @@
+---
+# tasks file for nginx-server
+
+  - name: ensure nginx is at the latest version
+    apt: name=nginx state=latest
+    register: nginx_installed
+    become: yes
+    notify:
+      - Nginx restart
+
+  - name: copy the nginx config file
+    when: nginx_installed is succeeded
+    become: yes
+    copy:
+      src: "{{ nginx_conf_src }}"
+      dest: "{{ nginx_conf_dst }}"
+    register: nginx_conf_copy
+    notify:
+     - Nginx reload
+
+  - name: create symlink
+    when: nginx_conf_copy is succeeded
+    file:
+      src: /etc/nginx/sites-available/static_site.conf
+      dest: /etc/nginx/sites-enabled/default
+      state: link
+    become: yes
+
+  - name: copy service_state.template file
+    when: nginx_conf_copy is succeeded
+    become: yes
+    copy:
+      src: "{{ serv_st_tmpl_src }}"
+      dest: "{{ serv_st_tmpl_dst }}"
+    register: nginx_service_state_copy
+
+  - name: make propper /opt/service_state when template is changed
+    when: nginx_service_state_copy.changed
+    become: yes
+    shell: cp "{{ serv_st_tmpl_dst }}" /opt/service_state
+    notify: 
+      - Nginx restart
+    register: propper_file
+
+  - name: add crontab for sed
+    when: propper_file is succeeded
+    become: yes
+    cron:
+      name: "change minutes in /opt/service_state"
+      job: 'sudo sed -i "s/is .*$/is $(($(ps -o etimes= -p $(cat /var/run/nginx.pid)) / 60)) minutes/" /opt/service_state'
+

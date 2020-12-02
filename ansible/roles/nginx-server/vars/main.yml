@@ -1,0 +1,6 @@
+---
+# vars file for nginx-server
+nginx_conf_src: nginx.conf
+nginx_conf_dst: /etc/nginx/sites-available/static_site.conf
+serv_st_tmpl_src: service_state.template
+serv_st_tmpl_dst: /opt/service_state.template
